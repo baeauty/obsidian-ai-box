@@ -1,0 +1,31 @@
+name: Publish release assets
+on:
+  release:
+    types: [published]
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Check release version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node -e "const fs=require('node:fs'); const m=JSON.parse(fs.readFileSync('manifest.json','utf8')); if(process.env.RELEASE_TAG!==m.version) throw new Error('Release tag must match manifest version');"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run package
+      - name: Attach plugin files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/ai-box/main.js dist/ai-box/manifest.json dist/ai-box/styles.css
