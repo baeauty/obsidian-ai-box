@@ -1,13 +1,8 @@
-import { App, FileSystemAdapter, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { App, FileSystemAdapter, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, type SettingDefinitionItem } from 'obsidian';
 import { AGENTS, defaultTarget, type AgentId } from './instructions';
-import { applyPlan, inspectTarget, makePlan, rollbackPlan, type Plan, type Receipt } from './bridge';
+import { applyPlan, inspectTarget, makePlan, rollbackPlan, type Plan } from './bridge';
 import { initializeVault, templateFiles } from './templates';
-
-interface Settings {
-  autoSave: boolean;
-  targets: Partial<Record<AgentId, string>>;
-  receipts: Partial<Record<AgentId, Receipt>>;
-}
+import { parseSettings, type Settings } from './validation';
 
 export default class AIBoxPlugin extends Plugin {
   settings: Settings = { autoSave: false, targets: {}, receipts: {} };
@@ -15,8 +10,8 @@ export default class AIBoxPlugin extends Plugin {
   settingsTab?: AIBoxSettings;
 
   async onload(): Promise<void> {
-    const saved = await this.loadData();
-    this.settings = { autoSave: saved?.autoSave === true, targets: saved?.targets ?? {}, receipts: saved?.receipts ?? {} };
+    const saved: unknown = await this.loadData();
+    this.settings = parseSettings(saved);
     this.settingsTab = new AIBoxSettings(this.app, this);
     this.addSettingTab(this.settingsTab);
     this.addCommand({ id: 'initialize-vault', name: '创建或补齐知识库结构', callback: () => this.previewInitialization() });
@@ -54,7 +49,7 @@ export default class AIBoxPlugin extends Plugin {
       new ConfirmModal(this.app, '创建或补齐知识库结构', [
         `位置：${this.root()}`,
         `将补充 ${missing.length} 个缺失模板文件。已有文件保持原样；不会清空、重建、导入其他电脑的笔记或创建定时任务。`,
-        '已有知识库可取消此操作，直接在 Agent 接入区域预览接入。接入操作不会调用这里的模板创建。',
+        '已有知识库可取消此操作，直接在 工具 接入区域预览接入。接入操作不会调用这里的模板创建。',
         ...missing,
       ].join('\n'), async () => {
         const result = await initializeVault({
@@ -89,7 +84,7 @@ export default class AIBoxPlugin extends Plugin {
     new ReportModal(this.app, '知识库结构检查', [
       `位置：${this.root()}`,
       missing.length ? `缺少 ${missing.length} 个模板文件（现有库也可以使用自己的模板）：\n${missing.join('\n')}` : '模板文件齐全。',
-      '这只是文件存在性检查，不代表内容质量或 Agent 行为已通过验收。',
+      '这只是文件存在性检查，不代表内容质量或 工具 行为已通过验收。',
     ].join('\n\n')).open();
   }
 
@@ -105,7 +100,7 @@ export default class AIBoxPlugin extends Plugin {
     const file = 'schema/AI Box 接入验收.md';
     if (!await this.app.vault.adapter.exists(file)) {
       if (!await this.app.vault.adapter.exists('schema')) await this.app.vault.createFolder('schema');
-      await this.app.vault.create(file, `# AI Box 接入验收\n\n状态：未验收。请按实际结果更新，不以配置写入成功替代行为验证。\n\n## 1. 权限\nAgent 的规则入口不扩大文件权限。若不能读取或写入当前库，按工具支持的机制授权此目录，不关闭沙箱。\n\n## 2. 新会话检索\n在知识库外的项目目录启动新会话，请它“检查个人知识库的结构，并说明实际读取了哪些入口，先不要修改”。确认真实文件读取成功。\n\n## 3. 精选写回\n启用自动精选沉淀并重新应用入口后，在新会话中说明：“这是虚构的长期回归演练：松果卡片 SG-n 按 n×2+7 计算，其他前缀不套用，仅用于测试。”让 Agent 完成 SG-5。检查是否精选保存为明确标注测试用途的流程，以及索引、日志是否同步更新。若只启用检索，则应不自动保存。\n\n## 4. 另一新会话复用\n不重复算法，仅请求：“按松果卡片演练处理 SG-9 和 XY-9。”预期通过实际检索得到 25、待核查；猜对数字但未检索不算通过。\n\n## 5. 跨工具与重启\n如接入多个 Agent，换另一个新会话重复步骤4。关闭 Obsidian 后仍应能直接使用知识文件。\n\n## 验收记录\n- 日期 / 工具版本：\n- 全局入口与权限配置：\n- 实际读取证据：\n- 写回及索引日志：\n- 新会话 / 跨工具复用：\n- 未通过与下一步：\n\n完成后可移除测试笔记并维护索引，保留必要验收结果。\n`);
+      await this.app.vault.create(file, `# AI Box 接入验收\n\n状态：未验收。请按实际结果更新，不以配置写入成功替代行为验证。\n\n## 1. 权限\nAgent 的规则入口不扩大文件权限。若不能读取或写入当前库，按工具支持的机制授权此目录，不关闭沙箱。\n\n## 2. 新会话检索\n在知识库外的项目目录启动新会话，请它“检查个人知识库的结构，并说明实际读取了哪些入口，先不要修改”。确认真实文件读取成功。\n\n## 3. 精选写回\n启用自动精选沉淀并重新应用入口后，在新会话中说明：“这是虚构的长期回归演练：松果卡片 SG-n 按 n×2+7 计算，其他前缀不套用，仅用于测试。”让 工具 完成 SG-5。检查是否精选保存为明确标注测试用途的流程，以及索引、日志是否同步更新。若只启用检索，则应不自动保存。\n\n## 4. 另一新会话复用\n不重复算法，仅请求：“按松果卡片演练处理 SG-9 和 XY-9。”预期通过实际检索得到 25、待核查；猜对数字但未检索不算通过。\n\n## 5. 跨工具与重启\n如接入多个 Agent，换另一个新会话重复步骤4。关闭 Obsidian 后仍应能直接使用知识文件。\n\n## 验收记录\n- 日期 / 工具版本：\n- 全局入口与权限配置：\n- 实际读取证据：\n- 写回及索引日志：\n- 新会话 / 跨工具复用：\n- 未通过与下一步：\n\n完成后可移除测试笔记并维护索引，保留必要验收结果。\n`);
     }
     const found = this.app.vault.getAbstractFileByPath(file);
     if (found instanceof TFile) await this.app.workspace.getLeaf(false).openFile(found);
@@ -114,22 +109,24 @@ export default class AIBoxPlugin extends Plugin {
 
 class AIBoxSettings extends PluginSettingTab {
   constructor(app: App, private plugin: AIBoxPlugin) { super(app, plugin); }
-  display(): void {
-    const el = this.containerEl;
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [{ name: '知识库与工具接入', aliases: ['DSH', 'Claude Code', 'Codex', '全局规则', '模板', '备份', '自动沉淀'], render: setting => this.renderSettings(setting.settingEl) }];
+  }
+  private renderSettings(el: HTMLElement): void {
     el.empty(); el.addClass('ai-box-settings');
-    el.createEl('h2', { text: 'AI Box · 本地知识库' });
-    el.createEl('p', { text: '已有知识库可直接在下方接入 Agent，无需重新初始化。只有新建空库或明确需要补充模板时，才使用结构创建功能。' });
+    new Setting(el).setName('本地知识库').setHeading();
+    el.createEl('p', { text: '已有知识库可直接在下方接入工具，无需重新初始化。只有新建空库或明确需要补充模板时，才使用结构创建功能。' });
     el.createEl('p', { text: `当前知识库：${this.plugin.root()}`, cls: 'ai-box-path' });
-    new Setting(el).setName('新建空库 / 补齐模板').setDesc('可选操作，与 Agent 接入独立。只补充缺失模板，不覆盖、清空或重建当前库。')
+    new Setting(el).setName('新建空库 / 补齐模板').setDesc('可选操作，与 工具 接入独立。只补充缺失模板，不覆盖、清空或重建当前库。')
       .addButton(b => b.setButtonText('预览补齐模板').onClick(() => this.plugin.previewInitialization()))
       .addButton(b => b.setButtonText('检查结构').onClick(() => { void this.plugin.run(() => this.plugin.checkVault()); }));
-    new Setting(el).setName('自动精选沉淀').setDesc('允许 Agent 在自身权限内保存有价值的新经验。关闭时只检索；切换后需要重新应用各工具入口。')
+    new Setting(el).setName('自动精选沉淀').setDesc('允许 工具 在自身权限内保存有价值的新经验。关闭时只检索；切换后需要重新应用各工具入口。')
       .addToggle(t => t.setValue(this.plugin.settings.autoSave).onChange(async value => {
         this.plugin.settings.autoSave = value; await this.plugin.save();
-        new Notice('设置已保存，请重新应用需要更新的 Agent 入口。');
+        new Notice('设置已保存，请重新应用需要更新的 工具 入口。');
       }));
-    el.createEl('h3', { text: 'Agent 接入' });
-    el.createEl('p', { text: '每个 Agent 的全局入口同一时间绑定一个库。接入另一个库会在预览中提示；不修改模型、凭据或沙箱配置。' });
+    new Setting(el).setName('工具接入').setHeading();
+    el.createEl('p', { text: '每个 工具 的全局入口同一时间绑定一个库。接入另一个库会在预览中提示；不修改模型、凭据或沙箱配置。' });
     for (const agent of AGENTS) {
       const section = el.createDiv({ cls: 'ai-box-agent' });
       new Setting(section).setName(agent.label).setDesc(`全局规则文件；默认识别 ${agent.env}，也可填写该工具实际使用的绝对路径。`)
@@ -193,9 +190,9 @@ class PlanModal extends Modal {
           if (receipt) {
             this.plugin.settings.receipts[this.plan.agent] = receipt;
             await this.plugin.save();
-            this.plugin.settingsTab?.display();
+            this.plugin.settingsTab?.update();
           }
-          new Notice('入口已更新。请启动 Agent 新会话并执行验收；文件访问权限仍由 Agent 管理。', 10000);
+          new Notice('入口已更新。请启动 工具 新会话并执行验收；文件访问权限仍由 工具 管理。', 10000);
         });
       }));
   }
@@ -206,7 +203,7 @@ class WelcomeModal extends Modal {
   constructor(app: App, private plugin: AIBoxPlugin) { super(app); }
   onOpen(): void {
     this.contentEl.createEl('h2', { text: 'AI Box' });
-    this.contentEl.createEl('p', { text: '已有库直接到“设置 → AI Box”选择 Agent 并预览接入，不需要重新初始化。以下结构创建操作仅供空库或补充缺失模板使用。' });
+    this.contentEl.createEl('p', { text: '已有库直接到“设置 → AI Box”选择 工具 并预览接入，不需要重新初始化。以下结构创建操作仅供空库或补充缺失模板使用。' });
     new Setting(this.contentEl)
       .addButton(b => b.setButtonText('预览补齐模板').onClick(() => { this.close(); this.plugin.previewInitialization(); }))
       .addButton(b => b.setButtonText('检查结构').onClick(() => { this.close(); void this.plugin.run(() => this.plugin.checkVault()); }));

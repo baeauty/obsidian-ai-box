@@ -51,9 +51,11 @@ test('插件 API 集成：启动、设置、初始化预览与应用、只读接
   }
   class Setting {
     name = '';
+    settingEl = new Element();
     constructor(el: any) { settings.push(this); }
     setName(name: string) { this.name = name; return this; }
     setDesc() { return this; }
+    setHeading() { return this; }
     addButton(fn: any) {
       const button: any = {
         text: '', disabled: false,
@@ -73,6 +75,7 @@ test('插件 API 集成：启动、设置、初始化预览与应用、只读接
   class PluginSettingTab {
     containerEl = new Element();
     constructor(public app: any, plugin: any) {}
+    update() { for (const definition of (this as any).getSettingDefinitions()) definition.render(new Setting(this.containerEl)); }
   }
   const obsidian = { Plugin, PluginSettingTab, Setting, Modal, TFile, FileSystemAdapter: Adapter,
     Notice: class { constructor(text: string) { notices.push(text); } } };
@@ -90,7 +93,7 @@ test('插件 API 集成：启动、设置、初始化预览与应用、只读接
   await plugin.onload();
   assert.equal(plugin.settings.autoSave, false);
   assert.equal(plugin.commands.length, 2);
-  plugin.tab.display();
+  plugin.tab.update();
   assert.equal(buttons.filter(b => b.text === '预览接入').length, 3);
   assert.equal(settings.filter(s => s.name === '自动精选沉淀').length, 1);
   plugin.previewInitialization(); await settle();

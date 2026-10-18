@@ -37,7 +37,7 @@ export function findBlock(text: string): ManagedBlock | undefined {
 }
 
 export function renderBlock(root: string, eol = '\n', autoSave = true): string {
-  if (!root || /[\r\n\u0000]/.test(root)) throw new Error('知识库路径无效');
+  if (!root || /[\r\n]/.test(root) || root.includes('\0')) throw new Error('知识库路径无效');
   const normalized = root.replace(/\\/g, '/').replace(/\/$/, '');
   const quote = (relative: string) => JSON.stringify(`${normalized}/${relative}`);
   return [BEGIN, `<!-- AI-BOX-VAULT: ${encodeURIComponent(root)} -->`,

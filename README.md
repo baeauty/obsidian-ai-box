@@ -1,5 +1,19 @@
 # AI Box · Obsidian 本地知识库接入
 
+Create a local knowledge base and connect DeepSeek Harness, Claude Code, and Codex through their global instruction files. Desktop only. Existing notes are preserved; connecting an agent does not initialize the vault.
+
+Requires Obsidian 1.13.0 or later. The settings page uses Obsidian's searchable settings definitions.
+
+License: [MIT](LICENSE). Maintainer: [baeauty](https://github.com/baeauty).
+
+## Privacy and external file access
+
+AI Box makes no network requests, calls no model APIs, and collects no telemetry. It does not require an account or payment. Separately installed agents may have their own account, network, and payment requirements.
+
+After you review a local preview and choose Apply, AI Box writes a marked instruction block to the selected agent's **global instruction file outside the vault**. This makes the current vault discoverable from other project directories. It stores the original file and rollback metadata in `.ai-box-backups` beside that global instruction file. Local settings also retain your selected paths and operation receipts. These files are never uploaded by the plugin.
+
+The plugin does not grant filesystem permissions, configure credentials, install agents, or change their model providers. Before uninstalling, use Disconnect if you want to remove the managed global instruction block. Disabling the Obsidian plugin alone leaves those instructions in place.
+
 在 Obsidian 内初始化个人知识库，通过 Agent **全局规则文件**接入 DeepSeek Harness、Claude Code 和 Codex。Agent 使用自身文件工具直接读写知识库；不需要 MCP、模型 API Key 或常驻服务。
 
 每台电脑可以从空库独立建立自己的知识库。不上传笔记，不同步电脑，不附带作者个人知识或账号配置。
@@ -16,7 +30,7 @@
 
 ## 安装
 
-第一版为**桌面版手动安装包**，尚未上架 Obsidian 社区插件市场。
+当前可通过 GitHub Release **手动安装**；社区市场条目提交后需完成官方审核，只有正式发布后才能在市场搜索安装。
 
 1. 在 Obsidian 新建并打开空白库，或打开已有库。
 2. 将发布包中的 `ai-box` 文件夹复制到当前库的 `.obsidian/plugins/`。最终应有 `.obsidian/plugins/ai-box/main.js`、`manifest.json`、`styles.css`。

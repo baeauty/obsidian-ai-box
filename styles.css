@@ -6,3 +6,4 @@
 .ai-box-source { width: 100%; min-height: 170px; resize: vertical; font-family: var(--font-monospace); font-size: var(--font-smaller); }
 .ai-box-report { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow: auto; }
 .ai-box-warning { padding: 10px; border-left: 3px solid var(--text-warning); background: var(--background-secondary); }
+.setting-item.ai-box-settings { display: block; }

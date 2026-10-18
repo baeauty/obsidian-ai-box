@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { applyPlan, makePlan, rollbackPlan, inspectTarget } from '../src/bridge';
 import { BEGIN, END, defaultTarget, findBlock, mergeBlock, removeBlock } from '../src/instructions';
 import { initializeVault, templateFiles } from '../src/templates';
+import { parseSettings } from '../src/validation';
 
 async function fixture(t: { after(fn: () => Promise<void>): void }) {
   const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ai-box-test-')));
@@ -64,6 +65,15 @@ test('默认位置识别各工具环境变量，拒绝相对目录', () => {
     assert.equal(defaultTarget(agent, { [env]: home }), path.join(home, file));
     assert.throws(() => defaultTarget(agent, { [env]: 'relative' }, home));
   }
+});
+
+test('损坏或旧版本地设置使用安全默认值，不把任意对象当作路径或恢复记录', () => {
+  for (const value of [null, [], 'wrong', 42, { autoSave: 'true', targets: { dsh: 123 }, receipts: { dsh: {} } }]) {
+    assert.deepEqual(parseSettings(value), { autoSave: false, targets: {}, receipts: {} });
+  }
+  const receipt = { target: '/test/AGENTS.md', backupId: 'id', at: 'date', action: 'connect' };
+  assert.deepEqual(parseSettings({ autoSave: true, targets: { dsh: '/test/AGENTS.md' }, receipts: { dsh: receipt } }),
+    { autoSave: true, targets: { dsh: '/test/AGENTS.md' }, receipts: { dsh: receipt } });
 });
 
 test('真实文件：预览不写入，备份后接入，重复接入不产生备份', async t => {
@@ -188,7 +198,7 @@ test('初始化在独立文件夹生成完整模板，重跑不覆盖已有笔�
 test('模板没有个人绝对路径、已完成案例和定时任务承诺；内部链接均存在', () => {
   const templates = templateFiles();
   const joined = Object.values(templates).join('\n');
-  assert.doesNotMatch(joined, /chenhan|D:\/Obsidian|BL-12|FlowHub|automation-2/);
+  assert.doesNotMatch(joined, /[A-Za-z]:[/\\]|\/Users\/|\/home\/|automation-\d/);
   for (const text of Object.values(templates)) {
     for (const match of text.matchAll(/\[\[([^|\]]+)(?:\|[^\]]+)?\]\]/g)) {
       assert.ok(templates[`${match[1]}.md`], `链接存在：${match[1]}`);

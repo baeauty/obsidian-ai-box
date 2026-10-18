@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { findBlock, mergeBlock, removeBlock, type AgentId } from './instructions';
+import { isRecord } from './validation';
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const digest = (text: string | null) => createHash('sha256').update(text === null ? 'absent' : `present:${text}`).digest('hex');
@@ -52,7 +53,7 @@ async function readTarget(target: string): Promise<string | null> {
 }
 
 function validatePaths(agent: AgentId, target: string, root: string): string {
-  if (!path.isAbsolute(target) || !path.isAbsolute(root) || /[\r\n\u0000]/.test(target + root)) {
+  if (!path.isAbsolute(target) || !path.isAbsolute(root) || /[\r\n]/.test(target + root) || (target + root).includes('\0')) {
     throw new Error('知识库和全局规则文件必须使用有效绝对路径。');
   }
   const resolved = path.resolve(target);
@@ -93,8 +94,8 @@ export async function rollbackPlan(agent: AgentId, receipt: Receipt, root: strin
   if (!/^[0-9a-f-]{36}\.json$/.test(receipt.backupId)) throw new Error('备份编号无效。');
   const file = path.join(path.dirname(target), '.ai-box-backups', receipt.backupId);
   await assertNoSymlink(file);
-  const record: Backup = JSON.parse(await fs.readFile(file, 'utf8'));
-  if (record.version !== 1 || record.target !== target || record.root !== path.resolve(root) ||
+  const record: unknown = JSON.parse(await fs.readFile(file, 'utf8'));
+  if (!isRecord(record) || record.version !== 1 || record.target !== target || record.root !== path.resolve(root) ||
       !(record.before === null || typeof record.before === 'string') || typeof record.afterHash !== 'string') {
     throw new Error('备份不属于此入口或当前知识库。');
   }

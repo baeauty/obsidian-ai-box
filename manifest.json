@@ -1,9 +1,10 @@
 {
   "id": "ai-box",
   "name": "AI Box",
-  "version": "0.1.1",
-  "minAppVersion": "1.5.0",
-  "description": "初始化本地知识库，通过全局规则接入 DeepSeek Harness、Claude Code 和 Codex。",
-  "author": "AI Box contributors",
+  "version": "0.1.2",
+  "minAppVersion": "1.13.0",
+  "description": "Create a local knowledge base and connect DeepSeek Harness, Claude Code, and Codex through global instructions.",
+  "author": "baeauty",
+  "authorUrl": "https://github.com/baeauty",
   "isDesktopOnly": true
 }
