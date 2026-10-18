@@ -85,4 +85,3 @@ npm run dev
 - [Codex 全局指令](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 
 DSH 处于开发者预览阶段，升级后应重新验收全局规则机制。发布本插件不代表获得任何上游项目背书。
-

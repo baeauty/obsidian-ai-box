@@ -1,0 +1,8 @@
+.ai-box-path { overflow-wrap: anywhere; color: var(--text-muted); }
+.ai-box-agent { border: 1px solid var(--background-modifier-border); border-radius: 10px; padding: 0 14px; margin: 12px 0; }
+.ai-box-agent .setting-item { flex-wrap: wrap; gap: 10px; }
+.ai-box-agent input[type="text"] { width: min(420px, 65vw); }
+.ai-box-agent .setting-item-control { flex-wrap: wrap; }
+.ai-box-source { width: 100%; min-height: 170px; resize: vertical; font-family: var(--font-monospace); font-size: var(--font-smaller); }
+.ai-box-report { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow: auto; }
+.ai-box-warning { padding: 10px; border-left: 3px solid var(--text-warning); background: var(--background-secondary); }
