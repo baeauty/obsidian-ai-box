@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 
 test('插件 API 集成：启动、设置、初始化预览与应用、只读接入、备份撤销', async t => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-box-plugin-'));
+  const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ai-box-plugin-')));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const root = path.join(dir, 'test-vault');
   await fs.mkdir(root);

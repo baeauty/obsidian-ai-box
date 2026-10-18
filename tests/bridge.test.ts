@@ -8,7 +8,7 @@ import { BEGIN, END, defaultTarget, findBlock, mergeBlock, removeBlock } from '.
 import { initializeVault, templateFiles } from '../src/templates';
 
 async function fixture(t: { after(fn: () => Promise<void>): void }) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-box-test-'));
+  const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ai-box-test-')));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const root = path.join(dir, '我的独立知识库');
   await fs.mkdir(root);
