@@ -2,7 +2,8 @@ import { App, FileSystemAdapter, Modal, Notice, Plugin, PluginSettingTab, Settin
 import { AGENTS, defaultTarget, type AgentId } from './instructions';
 import { applyPlan, inspectTarget, makePlan, rollbackPlan, type Plan } from './bridge';
 import { initializeVault, templateFiles } from './templates';
-import { parseSettings, type Settings } from './validation';
+import { isRecord, parseSettings, type Settings } from './validation';
+import { defaultMaintenance, JOB_IDS, JOB_NAMES, MAINTENANCE_FILE, maintenancePrompt, maintenanceStatus, parseMaintenance, scheduleLabel, type MaintenancePlan } from './maintenance';
 
 export default class AIBoxPlugin extends Plugin {
   settings: Settings = { autoSave: false, targets: {}, receipts: {} };
@@ -27,6 +28,17 @@ export default class AIBoxPlugin extends Plugin {
 
   target(id: AgentId): string { return this.settings.targets[id]?.trim() || defaultTarget(id); }
   async save(): Promise<void> { await this.saveData(this.settings); }
+
+  openMaintenance(): void {
+    void this.run(async () => {
+      const file = this.app.vault.getAbstractFileByPath(MAINTENANCE_FILE);
+      if (file && !(file instanceof TFile)) throw new Error('维护计划路径不是普通文件。');
+      const before = file instanceof TFile ? await this.app.vault.read(file) : null;
+      const raw: unknown = before === null ? defaultMaintenance() : JSON.parse(before);
+      const plan = parseMaintenance(raw);
+      new MaintenanceModal(this.app, this, plan, before).open();
+    });
+  }
 
   async run(work: () => Promise<void>): Promise<void> {
     if (this.busy) { new Notice('AI Box 正在处理上一项操作。'); return; }
@@ -110,7 +122,7 @@ export default class AIBoxPlugin extends Plugin {
 class AIBoxSettings extends PluginSettingTab {
   constructor(app: App, private plugin: AIBoxPlugin) { super(app, plugin); }
   getSettingDefinitions(): SettingDefinitionItem[] {
-    return [{ name: '知识库与工具接入', aliases: ['DSH', 'Claude Code', 'Codex', '全局规则', '模板', '备份', '自动沉淀'], render: setting => this.renderSettings(setting.settingEl) }];
+    return [{ name: '知识库与工具接入', aliases: ['DSH', 'Claude Code', 'Codex', '全局规则', '模板', '备份', '自动沉淀', '定时维护', '体检', '逾期'], render: setting => this.renderSettings(setting.settingEl) }];
   }
   private renderSettings(el: HTMLElement): void {
     el.empty(); el.addClass('ai-box-settings');
@@ -141,6 +153,8 @@ class AIBoxSettings extends PluginSettingTab {
     }
     new Setting(el).setName('新会话验收').setDesc('配置成功与实际行为分开检查。首次接入后在新会话验证检索、精选写回和复用。')
       .addButton(b => b.setButtonText('打开验收指南').onClick(() => { void this.plugin.run(() => this.plugin.openGuide()); }));
+    new Setting(el).setName('知识库定时维护').setDesc('查看维护计划、执行工具、最近成功与逾期情况；定时唤醒由外部工具负责。')
+      .addButton(b => b.setButtonText('维护计划与状态').onClick(() => this.plugin.openMaintenance()));
     el.createEl('p', { text: '备份保存在全局规则文件旁的 .ai-box-backups 中。卸载插件不会自动删除全局入口；需要时请先解除当前库。移动知识库后需重新应用入口。', cls: 'setting-item-description' });
   }
 }
@@ -175,6 +189,7 @@ class PlanModal extends Modal {
     const labels = { connect: '接入', disconnect: '解除当前库', rollback: '撤销上次操作' };
     el.createEl('h2', { text: `预览：${labels[this.plan.action]}` });
     el.createEl('p', { text: `目标：${this.plan.target}`, cls: 'ai-box-path' });
+    if (this.plan.action === 'connect') el.createEl('p', { text: this.plan.after?.includes('用户已在本机启用自动精选沉淀') ? '修改后模式：自动检索与精选沉淀' : '修改后模式：仅检索，不自动保存', cls: 'ai-box-warning' });
     for (const warning of this.plan.warnings) el.createEl('p', { text: warning, cls: 'ai-box-warning' });
     el.createEl('p', { text: '应用前会保存原文件备份。仅变更 AI Box 管理的入口；撤销操作仅在文件未发生后续修改时恢复原快照。' });
     for (const [label, text] of [['修改前', this.plan.before], ['修改后', this.plan.after]]) {
@@ -195,6 +210,60 @@ class PlanModal extends Modal {
           new Notice('入口已更新。请启动 工具 新会话并执行验收；文件访问权限仍由 工具 管理。', 10000);
         });
       }));
+  }
+  onClose(): void { this.contentEl.empty(); }
+}
+
+class MaintenanceModal extends Modal {
+  constructor(app: App, private plugin: AIBoxPlugin, private plan: MaintenancePlan, private before: string | null) { super(app); }
+  onOpen(): void {
+    const el = this.contentEl;
+    el.addClass('ai-box-maintenance');
+    el.createEl('h2', { text: '知识库维护计划与状态' });
+    el.createEl('p', { text: '计划属于当前知识库，记录由执行工具写回。保存计划不会创建、启用或修改外部定时任务；改动后请同步执行端。关闭软件后仍由外部工具执行。' });
+    new Setting(el).setName('时区').addText(t => t.setValue(this.plan.timezone).onChange(v => { this.plan.timezone = v.trim(); }));
+    for (const id of JOB_IDS) {
+      const job = this.plan.jobs[id];
+      el.createEl('h3', { text: JOB_NAMES[id] });
+      el.createEl('p', { text: `${scheduleLabel(id, job)}；${maintenanceStatus(this.plan, id)}`, cls: 'ai-box-path' });
+      if (job.evidence) el.createEl('p', { text: `最近成功证据：${job.evidence}` });
+      new Setting(el).setName('执行时间').setDesc('24 小时制，例如 20:30。保存后需同步外部调度。')
+        .addText(t => t.setValue(job.time).onChange(v => { job.time = v.trim(); }));
+      if (id !== 'inbox') new Setting(el).setName(id === 'weekly' ? '星期' : '每月日期').setDesc(id === 'weekly' ? '0 为周日，1 为周一，依此类推至 6。' : '1 至 28，避免月份缺少日期。')
+        .addText(t => t.setValue(String(job.day)).onChange(v => { job.day = Number(v); }));
+      new Setting(el).setName('执行工具').addText(t => t.setValue(job.executor).onChange(v => { job.executor = v.trim(); }));
+      new Setting(el).setName('外部任务编号').setDesc('由执行工具配置后登记；填写编号不代表任务已启用。')
+        .addText(t => t.setValue(job.automationId).onChange(v => { job.automationId = v.trim(); }));
+      new Setting(el).setName('维护指令').setDesc('生成后交给执行工具；本按钮不会自行唤醒工具或宣称维护完成。')
+        .addButton(b => b.setButtonText('生成维护与调度指令').onClick(() => { void this.plugin.run(async () => {
+          const valid = parseMaintenance(this.plan);
+          new ReportModal(this.app, JOB_NAMES[id], maintenancePrompt(valid, id, this.plugin.root())).open();
+          await Promise.resolve();
+        }); }))
+        .addButton(b => b.setButtonText('生成立即维护 / 补跑指令').onClick(() => { void this.plugin.run(async () => {
+          const valid = parseMaintenance(this.plan);
+          new ReportModal(this.app, '立即维护 / 补跑', maintenancePrompt(valid, id, this.plugin.root(), true)).open();
+          await Promise.resolve();
+        }); }));
+    }
+    new Setting(el).addButton(b => b.setButtonText('关闭').onClick(() => this.close()))
+      .addButton(b => b.setButtonText('保存维护计划').setCta().onClick(() => { void this.plugin.run(async () => {
+        const valid = parseMaintenance(this.plan);
+        if (await this.app.vault.adapter.exists('schema/维护/.ai-box-maintenance.lock')) throw new Error('知识库正在维护，请待完成后再保存计划。');
+        const current = this.app.vault.getAbstractFileByPath(MAINTENANCE_FILE);
+        if (current && !(current instanceof TFile)) throw new Error('维护计划路径冲突。');
+        const latest = current instanceof TFile ? await this.app.vault.read(current) : null;
+        if (latest !== this.before) throw new Error('维护计划或执行记录已变化，请关闭后重新打开，避免覆盖新记录。');
+        const previous: unknown = latest === null ? {} : JSON.parse(latest);
+        if (!isRecord(previous)) throw new Error('原维护计划损坏，未覆盖。');
+        const merged = { ...previous, ...valid, jobs: { ...(isRecord(previous.jobs) ? previous.jobs : {}) } };
+        for (const id of JOB_IDS) merged.jobs[id] = { ...(isRecord(merged.jobs[id]) ? merged.jobs[id] : {}), ...valid.jobs[id] };
+        const text = JSON.stringify(merged, null, 2) + '\n';
+        for (const folder of ['schema', 'schema/维护']) if (!await this.app.vault.adapter.exists(folder)) await this.app.vault.createFolder(folder);
+        if (current instanceof TFile) await this.app.vault.modify(current, text);
+        else await this.app.vault.create(MAINTENANCE_FILE, text);
+        this.close(); new Notice('维护计划已保存。请在执行工具中同步定时任务；未运行的项目仍显示尚未验证。', 10000);
+      }); }));
   }
   onClose(): void { this.contentEl.empty(); }
 }

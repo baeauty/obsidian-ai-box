@@ -5,3 +5,4 @@ dist/
 .DS_Store
 .obsidian/
 .env*
+__pycache__/

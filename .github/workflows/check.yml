@@ -18,6 +18,10 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/test_maintenance_runner.py
       - run: npm run package
       - uses: actions/upload-artifact@v4
         with:

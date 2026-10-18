@@ -15,6 +15,7 @@ test('插件 API 集成：启动、设置、初始化预览与应用、只读接
   const modals: any[] = [];
   const buttons: any[] = [];
   const settings: any[] = [];
+  const toggles: any[] = [];
   class Element {
     value = ''; readOnly = false;
     empty() {} addClass() {} setAttribute() {}
@@ -30,6 +31,8 @@ test('插件 API 集成：启动、设置、初始化预览与应用、只读接
   const app: any = { vault: {
     adapter: new Adapter(),
     getAbstractFileByPath: (file: string) => entries.get(file) ?? null,
+    read: async (file: TFile) => await fs.readFile(path.join(root, file.path), 'utf8'),
+    modify: async (file: TFile, text: string) => { await fs.writeFile(path.join(root, file.path), text); },
     createFolder: async (folder: string) => { await fs.mkdir(path.join(root, folder)); entries.set(folder, {}); },
     create: async (file: string, text: string) => {
       await fs.writeFile(path.join(root, file), text, { flag: 'wx' });
@@ -69,7 +72,7 @@ test('插件 API 集成：启动、设置、初始化预览与应用、只读接
       fn(control); return this;
     }
     addToggle(fn: any) {
-      const toggle: any = { setValue() { return this; }, onChange() { return this; } }; fn(toggle); return this;
+      const toggle: any = { setValue() { return this; }, onChange(change: any) { this.change = change; return this; } }; fn(toggle); toggles.push(toggle); return this;
     }
   }
   class PluginSettingTab {
@@ -132,5 +135,25 @@ test('插件 API 集成：启动、设置、初始化预览与应用、只读接
   await plugin.checkVault();
   await plugin.openGuide();
   assert.ok(entries.get('schema/AI Box 接入验收.md') instanceof TFile);
+  await toggles.at(-1).change(true);
+  plugin.previewAgent('dsh', 'connect'); await settle();
+  assert.match(modals.at(-1).plan.after, /用户已在本机启用自动精选沉淀/);
+  assert.doesNotMatch(modals.at(-1).plan.after, /不得自动保存/);
+  assert.equal(plugin.settings.autoSave, true);
+  plugin.openMaintenance(); await settle();
+  assert.equal(await app.vault.adapter.exists('schema/维护/AI Box维护.json'), false, '打开维护面板不创建计划或定时任务');
+  buttons.filter(b => b.text === '保存维护计划').at(-1).click(); await settle();
+  const maintenanceFile = path.join(root, 'schema/维护/AI Box维护.json');
+  const maintenance = JSON.parse(await fs.readFile(maintenanceFile, 'utf8'));
+  assert.equal(maintenance.jobs.weekly.day, 1);
+  assert.equal(maintenance.jobs.inbox.automationId, '');
+  assert.equal(maintenance.jobs.inbox.lastSuccess, undefined, '保存计划不伪造成功');
+  plugin.openMaintenance(); await settle();
+  maintenance.extra = 'externally changed';
+  const concurrent = JSON.stringify(maintenance);
+  await fs.writeFile(maintenanceFile, concurrent);
+  buttons.filter(b => b.text === '保存维护计划').at(-1).click(); await settle();
+  assert.equal(await fs.readFile(maintenanceFile, 'utf8'), concurrent, '并发修改拒绝覆盖');
+  assert.match(notices.pop() ?? '', /已变化/);
   assert.equal(notices.filter(n => n.includes('AI Box：')).length, 0, notices.join('\n'));
 });

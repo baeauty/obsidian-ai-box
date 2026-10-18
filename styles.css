@@ -7,3 +7,4 @@
 .ai-box-report { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 60vh; overflow: auto; }
 .ai-box-warning { padding: 10px; border-left: 3px solid var(--text-warning); background: var(--background-secondary); }
 .setting-item.ai-box-settings { display: block; }
+.ai-box-maintenance { max-height: 75vh; overflow-y: auto; }

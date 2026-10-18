@@ -101,3 +101,13 @@ npm run dev
 - [Codex 全局指令](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 
 DSH 处于开发者预览阶段，升级后应重新验收全局规则机制。发布本插件不代表获得任何上游项目背书。
+# Maintenance in 0.2.0
+
+AI Box now provides a vault-owned maintenance dashboard under **Settings → AI Box → 维护计划与状态**. Save schedules, record the responsible tool and external task IDs, and inspect last-success evidence, failures, and overdue work. Defaults are daily incremental inbox processing at 20:30, Monday structure and incremental content review at 20:00, and monthly full content review on day 1 at 19:00, in the displayed timezone.
+
+The plugin does not start background agents, call model APIs, or install external schedules. Saving a plan does not activate a timer. Use the generated instructions with a capable external scheduler, then record the actual task ID. External tools must run on an available computer with the required permissions. A shared maintenance lock prevents overlapping compliant workers. The optional `scripts/maintenance-runner.py` in this source repository records token-owned runs and validates report evidence; it does not perform semantic review. Run it with Python 3.10+.
+
+Reports distinguish manual checks from scheduled execution. Monthly content review must cover every listed page in batches; a partial run is not recorded as complete. Editing a schedule marks the external registration as needing synchronization. The UI does not infer success from a task ID or pretend to monitor the external scheduler's enabled state. Malformed plans and concurrently changed records are preserved and reported.
+
+Manual maintenance and catch-up buttons generate instructions for your tool; they do not silently launch it. Plans and worker reports live in `schema/维护/AI Box维护.json`, and disabling the plugin does not disable already-created external schedules.
+
