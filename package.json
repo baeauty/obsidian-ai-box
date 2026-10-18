@@ -1,6 +1,6 @@
 {
   "name": "obsidian-ai-box",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "license": "MIT",
   "description": "为本地 Obsidian 知识库初始化结构并接入 Agent 全局规则。",

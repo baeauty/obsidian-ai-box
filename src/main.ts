@@ -19,7 +19,7 @@ export default class AIBoxPlugin extends Plugin {
     this.settings = { autoSave: saved?.autoSave === true, targets: saved?.targets ?? {}, receipts: saved?.receipts ?? {} };
     this.settingsTab = new AIBoxSettings(this.app, this);
     this.addSettingTab(this.settingsTab);
-    this.addCommand({ id: 'initialize-vault', name: '初始化当前知识库', callback: () => this.previewInitialization() });
+    this.addCommand({ id: 'initialize-vault', name: '创建或补齐知识库结构', callback: () => this.previewInitialization() });
     this.addCommand({ id: 'check-vault', name: '检查知识库结构', callback: () => { void this.run(() => this.checkVault()); } });
     this.addRibbonIcon('library', 'AI Box：知识库接入', () => new WelcomeModal(this.app, this).open());
   }
@@ -43,7 +43,7 @@ export default class AIBoxPlugin extends Plugin {
 
   async ready(): Promise<void> {
     for (const file of ['SCHEMA.md', 'wiki/index.md', 'schema/规则/自动知识库规则.md']) {
-      if (!(this.app.vault.getAbstractFileByPath(file) instanceof TFile)) throw new Error(`缺少 ${file}，请先初始化或补全现有知识库。`);
+      if (!(this.app.vault.getAbstractFileByPath(file) instanceof TFile)) throw new Error(`缺少入口文件 ${file}。请补齐该入口后再接入；已有知识库不需要重建。`);
     }
   }
 
@@ -51,9 +51,10 @@ export default class AIBoxPlugin extends Plugin {
     void this.run(async () => {
       this.root();
       const missing = Object.keys(templateFiles()).filter(file => !this.app.vault.getAbstractFileByPath(file));
-      new ConfirmModal(this.app, '初始化当前知识库', [
+      new ConfirmModal(this.app, '创建或补齐知识库结构', [
         `位置：${this.root()}`,
-        `将补充 ${missing.length} 个缺失文件。已有文件保持原样；不会导入其他电脑的笔记或创建定时任务。`,
+        `将补充 ${missing.length} 个缺失模板文件。已有文件保持原样；不会清空、重建、导入其他电脑的笔记或创建定时任务。`,
+        '已有知识库可取消此操作，直接在 Agent 接入区域预览接入。接入操作不会调用这里的模板创建。',
         ...missing,
       ].join('\n'), async () => {
         const result = await initializeVault({
@@ -117,10 +118,10 @@ class AIBoxSettings extends PluginSettingTab {
     const el = this.containerEl;
     el.empty(); el.addClass('ai-box-settings');
     el.createEl('h2', { text: 'AI Box · 本地知识库' });
-    el.createEl('p', { text: '初始化当前库，再通过各 Agent 的全局规则接入。每台电脑独立使用，无需 MCP 服务。' });
+    el.createEl('p', { text: '已有知识库可直接在下方接入 Agent，无需重新初始化。只有新建空库或明确需要补充模板时，才使用结构创建功能。' });
     el.createEl('p', { text: `当前知识库：${this.plugin.root()}`, cls: 'ai-box-path' });
-    new Setting(el).setName('知识库结构').setDesc('只补充缺失文件，保留当前笔记与规则。')
-      .addButton(b => b.setButtonText('预览初始化').onClick(() => this.plugin.previewInitialization()))
+    new Setting(el).setName('新建空库 / 补齐模板').setDesc('可选操作，与 Agent 接入独立。只补充缺失模板，不覆盖、清空或重建当前库。')
+      .addButton(b => b.setButtonText('预览补齐模板').onClick(() => this.plugin.previewInitialization()))
       .addButton(b => b.setButtonText('检查结构').onClick(() => { void this.plugin.run(() => this.plugin.checkVault()); }));
     new Setting(el).setName('自动精选沉淀').setDesc('允许 Agent 在自身权限内保存有价值的新经验。关闭时只检索；切换后需要重新应用各工具入口。')
       .addToggle(t => t.setValue(this.plugin.settings.autoSave).onChange(async value => {
@@ -205,9 +206,9 @@ class WelcomeModal extends Modal {
   constructor(app: App, private plugin: AIBoxPlugin) { super(app); }
   onOpen(): void {
     this.contentEl.createEl('h2', { text: 'AI Box' });
-    this.contentEl.createEl('p', { text: '在“设置 → AI Box”选择 Agent 并预览接入。所有知识保存在当前库的本地文件中。' });
+    this.contentEl.createEl('p', { text: '已有库直接到“设置 → AI Box”选择 Agent 并预览接入，不需要重新初始化。以下结构创建操作仅供空库或补充缺失模板使用。' });
     new Setting(this.contentEl)
-      .addButton(b => b.setButtonText('初始化当前库').onClick(() => { this.close(); this.plugin.previewInitialization(); }))
+      .addButton(b => b.setButtonText('预览补齐模板').onClick(() => { this.close(); this.plugin.previewInitialization(); }))
       .addButton(b => b.setButtonText('检查结构').onClick(() => { this.close(); void this.plugin.run(() => this.plugin.checkVault()); }));
   }
   onClose(): void { this.contentEl.empty(); }

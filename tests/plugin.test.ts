@@ -97,12 +97,30 @@ test('插件 API 集成：启动、设置、初始化预览与应用、只读接
   assert.equal((await fs.readdir(root)).length, 0, '仅预览不写入');
   buttons.filter(b => b.text === '应用').at(-1).click(); await settle();
   assert.ok(entries.get('SCHEMA.md') instanceof TFile);
+  await fs.writeFile(path.join(root, 'SCHEMA.md'), '# 我的已有知识库\n保留自定义规范与历史资料。\n');
+  const snapshot = async (): Promise<Record<string, string>> => {
+    const files: Record<string, string> = {};
+    const walk = async (folder: string) => {
+      for (const entry of await fs.readdir(path.join(root, folder), { withFileTypes: true })) {
+        const relative = path.join(folder, entry.name);
+        if (entry.isDirectory()) await walk(relative);
+        else files[relative] = (await fs.readFile(path.join(root, relative))).toString('base64');
+      }
+    };
+    await walk('');
+    return files;
+  };
+  const existingVault = await snapshot();
+  const freshPlugin = new module.exports.default();
+  await freshPlugin.onload();
+  assert.deepEqual(await snapshot(), existingVault, '插件启动不初始化已有库');
   const target = path.join(dir, '.dsh', 'AGENTS.md');
   plugin.settings.targets.dsh = target;
   plugin.previewAgent('dsh', 'connect'); await settle();
   await assert.rejects(fs.stat(target));
   buttons.filter(b => b.text === '备份并应用').at(-1).click(); await settle();
   assert.match(await fs.readFile(target, 'utf8'), /不得自动保存/);
+  assert.deepEqual(await snapshot(), existingVault, 'DSH 接入只修改库外全局入口，不新增或重写任何库内文件');
   assert.ok(plugin.settings.receipts.dsh);
   plugin.previewAgent('dsh', 'rollback'); await settle();
   buttons.filter(b => b.text === '备份并应用').at(-1).click(); await settle();
